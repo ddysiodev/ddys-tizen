@@ -11,6 +11,7 @@
     directOnly: false,
     includeExternal: true
   };
+
   var KEY_CODES = {
     enter: 13,
     left: 37,
@@ -32,9 +33,9 @@
   };
 
   var store = global.DDYSStore.create('ddys-tizen');
-  var settings = merge(DEFAULT_SETTINGS, store.read('settings', DEFAULT_SETTINGS));
-  var favorites = store.read('favorites', []);
-  var history = store.read('history', []);
+  var settings = global.DDYSClient.normalizeSettings(merge(DEFAULT_SETTINGS, safeArrayOrObject(store.read('settings', DEFAULT_SETTINGS), DEFAULT_SETTINGS)));
+  var favorites = safeArrayOrObject(store.read('favorites', []), []);
+  var history = safeArrayOrObject(store.read('history', []), []);
   var screen = null;
   var statusLine = null;
   var toast = null;
@@ -43,6 +44,7 @@
   var client = null;
   var activeView = 'home';
   var lastList = [];
+  var lastBackAt = 0;
 
   document.addEventListener('DOMContentLoaded', boot);
 
@@ -55,7 +57,7 @@
     client = global.DDYSClient.create(settings);
     registerRemoteKeys();
     bindEvents();
-    setStatus('Tizen 电视端已就绪');
+    setStatus('Tizen TV app is ready');
     renderHome();
   }
 
@@ -120,12 +122,29 @@
     if (code === KEY_CODES.enter) { event.preventDefault(); focus.click(); return; }
     if (code === KEY_CODES.back || code === KEY_CODES.escape) {
       event.preventDefault();
-      if (activeView !== 'home') openView('home');
+      handleBack();
+      return;
     }
     if (code === KEY_CODES.red) openView('search');
     if (code === KEY_CODES.green) openView('favorites');
     if (code === KEY_CODES.yellow) openView('history');
     if (code === KEY_CODES.blue) openView('settings');
+  }
+
+  function handleBack() {
+    var now = Date.now();
+    if (activeView !== 'home') {
+      openView('home');
+      return;
+    }
+    if (now - lastBackAt < 2000) {
+      try {
+        if (global.tizen && global.tizen.application) global.tizen.application.getCurrentApplication().exit();
+      } catch (error) {}
+      return;
+    }
+    lastBackAt = now;
+    toastText('Press Back again to exit');
   }
 
   function handleAction(event) {
@@ -178,31 +197,32 @@
   function renderHome() {
     activeView = 'home';
     updateNav('home');
-    setLoading('正在读取首页');
+    setLoading('Loading home');
     Promise.all([client.latest(settings.pageSize), client.hot(settings.pageSize)]).then(function (results) {
       lastList = results[0].concat(results[1]);
       screen.innerHTML = [
         heroHtml(),
         categoryHtml(client.categories()),
-        rowHtml('最新更新', results[0]),
-        rowHtml('热门推荐', results[1])
+        rowHtml('Latest', results[0]),
+        rowHtml('Hot', results[1])
       ].join('');
       focus.refresh();
-      setStatus('首页已更新');
+      setStatus('Home updated');
     }).catch(showError);
   }
 
   function renderCategory(type) {
-    setLoading('正在读取分类');
     var category = findCategory(type);
-    var promise = type === 'latest' ? client.latest(settings.pageSize) :
+    var promise;
+    setLoading('Loading ' + (category.title || type));
+    promise = type === 'latest' ? client.latest(settings.pageSize) :
       type === 'hot' ? client.hot(settings.pageSize) :
       client.movies(type, 1, settings.pageSize);
     promise.then(function (items) {
       lastList = items;
-      screen.innerHTML = '<section class="view-head"><h2>' + escapeHtml(category.title || type) + '</h2><p>遥控器方向键选择影片，确认键打开详情。</p></section>' + gridHtml(items);
+      screen.innerHTML = '<section class="view-head"><h2>' + escapeHtml(category.title || type) + '</h2><p>Use the remote arrows to choose a title, then press Enter for details.</p></section>' + gridHtml(items);
       focus.refresh();
-      setStatus((category.title || type) + ' 已更新');
+      setStatus((category.title || type) + ' updated');
     }).catch(showError);
   }
 
@@ -210,10 +230,10 @@
     activeView = 'search';
     updateNav('search');
     screen.innerHTML = [
-      '<section class="view-head"><h2>搜索</h2><p>在电视输入法中输入片名，确认后搜索。</p></section>',
+      '<section class="view-head"><h2>Search</h2><p>Use the TV input method to enter a title or keyword.</p></section>',
       '<section class="search-bar">',
-      '<input data-focusable id="searchInput" type="search" value="" placeholder="输入片名">',
-      '<button data-focusable data-action="run-search">搜索</button>',
+      '<input data-focusable id="searchInput" type="search" value="" placeholder="Title or keyword">',
+      '<button data-focusable data-action="run-search">Search</button>',
       '</section>',
       '<section id="searchResult" class="movie-grid"></section>'
     ].join('');
@@ -225,21 +245,21 @@
     var result = document.getElementById('searchResult');
     var query = input ? input.value.replace(/^\s+|\s+$/g, '') : '';
     if (!query) {
-      toastText('请输入搜索内容');
+      toastText('Enter a search keyword');
       return;
     }
-    result.innerHTML = '<div class="empty">搜索中...</div>';
+    result.innerHTML = '<div class="empty">Searching...</div>';
     client.search(query, 1, settings.pageSize).then(function (items) {
       lastList = items;
       result.outerHTML = gridHtml(items);
       focus.refresh();
-      setStatus('搜索完成：' + query);
+      setStatus('Search complete: ' + query);
     }).catch(showError);
   }
 
   function renderDetail(slug) {
     if (!slug) return;
-    setLoading('正在读取详情');
+    setLoading('Loading details');
     client.movieWithResources(slug).then(function (data) {
       var movie = data.movie;
       var resources = data.resources;
@@ -252,17 +272,17 @@
         '<div class="detail-main">',
         '<p class="eyebrow">' + escapeHtml([movie.year, movie.type, movie.region, movie.rating].filter(Boolean).join(' / ')) + '</p>',
         '<h2>' + escapeHtml(movie.title || slug) + '</h2>',
-        '<p class="summary">' + escapeHtml(movie.summary || movie.subtitle || '暂无简介') + '</p>',
+        '<p class="summary">' + escapeHtml(movie.summary || movie.subtitle || 'No description available.') + '</p>',
         '<div class="detail-actions">',
-        '<button data-focusable data-action="favorite" data-slug="' + escapeAttr(movie.slug || movie.id) + '">' + (fav ? '取消收藏' : '加入收藏') + '</button>',
+        '<button data-focusable data-action="favorite" data-slug="' + escapeAttr(movie.slug || movie.id) + '">' + (fav ? 'Remove Favorite' : 'Add Favorite') + '</button>',
         '</div>',
-        '<h3>播放资源</h3>',
+        '<h3>Playback Resources</h3>',
         resourceListHtml(resources),
         '</div>',
         '</section>'
       ].join('');
       focus.refresh();
-      setStatus('详情已打开');
+      setStatus('Details opened');
     }).catch(showError);
   }
 
@@ -273,7 +293,7 @@
     resource = detail.resources[index];
     if (!resource) return;
     if (!resource.playable) {
-      toastText('该资源不是电视可直接播放链接');
+      toastText('This resource is not directly playable on TV.');
       return;
     }
     player.open(resource, detail.movie);
@@ -282,7 +302,7 @@
   function renderFavorites() {
     activeView = 'favorites';
     updateNav('favorites');
-    screen.innerHTML = '<section class="view-head"><h2>收藏</h2><p>收藏会保存在电视本地。</p></section>' + gridHtml(favorites);
+    screen.innerHTML = '<section class="view-head"><h2>Favorites</h2><p>Favorites are stored locally on this TV.</p></section>' + gridHtml(favorites);
     focus.refresh();
   }
 
@@ -290,7 +310,7 @@
     activeView = 'history';
     updateNav('history');
     screen.innerHTML = [
-      '<section class="view-head"><h2>观看历史</h2><p>记录最近播放的影片和资源。</p><button data-focusable data-action="clear-history">清空历史</button></section>',
+      '<section class="view-head"><h2>Watch History</h2><p>Recently played movies and resources.</p><button data-focusable data-action="clear-history">Clear History</button></section>',
       historyHtml()
     ].join('');
     focus.refresh();
@@ -301,37 +321,38 @@
     updateNav('settings');
     screen.innerHTML = [
       '<section class="settings">',
-      '<div class="view-head"><h2>设置</h2><p>配置 DDYS API 和资源展示策略。</p></div>',
+      '<div class="view-head"><h2>Settings</h2><p>Configure DDYS API access and resource display behavior.</p></div>',
       formRow('API Base', 'apiBase', settings.apiBase, 'text'),
       formRow('API Key', 'apiKey', settings.apiKey, 'password'),
-      selectRow('API Key 模式', 'apiKeyMode', settings.apiKeyMode, [['query', 'Query'], ['bearer', 'Bearer'], ['header', 'Header']]),
+      selectRow('API Key Mode', 'apiKeyMode', settings.apiKeyMode, [['query', 'Query'], ['bearer', 'Bearer'], ['header', 'Header']]),
       formRow('API Key Query', 'apiKeyQuery', settings.apiKeyQuery, 'text'),
-      formRow('每页数量', 'pageSize', settings.pageSize, 'number'),
-      formRow('缓存秒数', 'cacheTtlSeconds', settings.cacheTtlSeconds, 'number'),
-      toggleRow('只显示直连播放资源', 'directOnly', settings.directOnly),
-      toggleRow('显示网盘/磁力等外部资源', 'includeExternal', settings.includeExternal),
-      '<div class="form-actions"><button data-focusable data-action="save-settings">保存设置</button><button data-focusable data-action="clear-cache">清理缓存</button></div>',
+      formRow('Page Size', 'pageSize', settings.pageSize, 'number'),
+      formRow('Cache Seconds', 'cacheTtlSeconds', settings.cacheTtlSeconds, 'number'),
+      toggleRow('Direct playable resources only', 'directOnly', settings.directOnly),
+      toggleRow('Show external resources', 'includeExternal', settings.includeExternal),
+      '<div class="form-actions"><button data-focusable data-action="save-settings">Save Settings</button><button data-focusable data-action="clear-cache">Clear Cache</button></div>',
       '</section>'
     ].join('');
     focus.refresh();
   }
 
   function renderCheck() {
+    var checks;
     activeView = 'check';
     updateNav('check');
-    var checks = [
+    checks = [
       ['Tizen API', !!global.tizen],
-      ['遥控器注册 API', !!(global.tizen && global.tizen.tvinputdevice)],
+      ['Remote key API', !!(global.tizen && global.tizen.tvinputdevice)],
       ['Samsung AVPlay', global.DDYSPlayer.hasAvplay()],
-      ['浏览器 video fallback', player.selfCheck().fallbackVideo],
-      ['本地存储', !!store.write('__check', { ok: true })],
+      ['Browser video fallback', player.selfCheck().fallbackVideo],
+      ['Local storage', !!store.write('__check', { ok: true })],
       ['API Base', settings.apiBase]
     ];
     screen.innerHTML = [
-      '<section class="view-head"><h2>自检</h2><p>检查电视运行环境、播放器和配置。</p><button data-focusable data-action="run-check">重新检测</button></section>',
+      '<section class="view-head"><h2>Self Check</h2><p>Check the TV runtime, player, storage, and API settings.</p><button data-focusable data-action="run-check">Run Again</button></section>',
       '<section class="check-list">',
       checks.map(function (item) {
-        return '<div class="check-item"><span>' + escapeHtml(item[0]) + '</span><strong class="' + (item[1] ? 'ok' : 'warn') + '">' + escapeHtml(item[1] === true ? '正常' : item[1] || '不可用') + '</strong></div>';
+        return '<div class="check-item"><span>' + escapeHtml(item[0]) + '</span><strong class="' + (item[1] ? 'ok' : 'warn') + '">' + escapeHtml(item[1] === true ? 'OK' : item[1] || 'Unavailable') + '</strong></div>';
       }).join(''),
       '</section>'
     ].join('');
@@ -341,9 +362,9 @@
 
   function pingApi() {
     client.latest(1).then(function () {
-      setStatus('API 连接正常');
+      setStatus('API connection OK');
     }).catch(function (error) {
-      setStatus('API 连接失败：' + (error && error.message ? error.message : error));
+      setStatus('API connection failed: ' + (error && error.message ? error.message : error));
     });
   }
 
@@ -361,13 +382,13 @@
     settings = global.DDYSClient.normalizeSettings(settings);
     store.write('settings', settings);
     client = global.DDYSClient.create(settings);
-    toastText('设置已保存');
+    toastText('Settings saved');
     renderHome();
   }
 
   function clearCache() {
     client.clearCache();
-    toastText('缓存已清理');
+    toastText('Cache cleared');
   }
 
   function clearHistory() {
@@ -407,7 +428,7 @@
   }
 
   function heroHtml() {
-    return '<section class="hero"><div><p class="eyebrow">Samsung Tizen TV</p><h2>在电视上浏览 DDYS</h2><p>方向键移动，确认键打开，返回键回首页，彩色键可快速切换搜索/收藏/历史/设置。</p></div></section>';
+    return '<section class="hero"><div><p class="eyebrow">Samsung Tizen TV</p><h2>Browse DDYS on your TV</h2><p>Use arrow keys to move, Enter to open, Back to return home, and color keys for Search / Favorites / History / Settings.</p></div></section>';
   }
 
   function categoryHtml(categories) {
@@ -421,7 +442,7 @@
   }
 
   function gridHtml(items) {
-    if (!items || !items.length) return '<section class="empty">没有内容。</section>';
+    if (!items || !items.length) return '<section class="empty">No content.</section>';
     return '<section class="movie-grid">' + items.map(movieCardHtml).join('') + '</section>';
   }
 
@@ -439,7 +460,7 @@
   }
 
   function resourceListHtml(resources) {
-    if (!resources || !resources.length) return '<div class="empty">没有可展示资源。</div>';
+    if (!resources || !resources.length) return '<div class="empty">No resources to display.</div>';
     return '<div class="resource-list">' + resources.map(function (resource, index) {
       return '<button data-focusable class="resource-item" data-action="play" data-value="' + index + '">' +
         '<span><strong>' + escapeHtml(resource.title || 'Resource') + '</strong><small>' + escapeHtml(resource.group || '') + '</small></span>' +
@@ -449,7 +470,7 @@
   }
 
   function historyHtml() {
-    if (!history.length) return '<section class="empty">还没有观看历史。</section>';
+    if (!history.length) return '<section class="empty">No watch history yet.</section>';
     return '<section class="history-list">' + history.map(function (item) {
       return '<button data-focusable class="history-item" data-action="detail" data-slug="' + escapeAttr(item.slug) + '">' +
         '<strong>' + escapeHtml(item.title || item.slug) + '</strong>' +
@@ -485,13 +506,13 @@
 
   function showError(error) {
     var message = error && error.message ? error.message : String(error);
-    screen.innerHTML = '<section class="error"><h2>加载失败</h2><p>' + escapeHtml(message) + '</p><button data-focusable data-action="settings">检查设置</button></section>';
-    setStatus('加载失败：' + message);
+    screen.innerHTML = '<section class="error"><h2>Load failed</h2><p>' + escapeHtml(message) + '</p><button data-focusable data-action="settings">Check Settings</button></section>';
+    setStatus('Load failed: ' + message);
     focus.refresh();
   }
 
   function setStatus(text) {
-    statusLine.textContent = text;
+    if (statusLine) statusLine.textContent = text;
   }
 
   function toastText(text) {
@@ -553,6 +574,11 @@
     Object.keys(base || {}).forEach(function (key) { out[key] = base[key]; });
     Object.keys(extra || {}).forEach(function (key) { out[key] = extra[key]; });
     return out;
+  }
+
+  function safeArrayOrObject(value, fallback) {
+    if (Array.isArray(fallback)) return Array.isArray(value) ? value : fallback.slice();
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : merge(fallback, {});
   }
 
   function closest(node, selector) {

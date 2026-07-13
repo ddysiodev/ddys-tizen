@@ -14,14 +14,19 @@
     var paused = false;
 
     function open(resource, movie) {
+      if (!resource || !resource.url) {
+        setStatus('No playable URL.');
+        return;
+      }
       current = { resource: resource, movie: movie, startedAt: Date.now() };
       prepared = false;
       paused = false;
       title.textContent = movie && movie.title ? movie.title : resource.title || 'DDYS';
-      source.textContent = resource.title || resource.group || '播放资源';
-      status.textContent = '正在打开播放器';
+      source.textContent = resource.title || resource.group || 'Playback Resource';
+      status.textContent = 'Opening player...';
       screen.hidden = false;
       screen.classList.add('is-active');
+      usingAvplay = hasAvplay();
       if (usingAvplay) openAvplay(resource.url);
       else openVideo(resource.url);
     }
@@ -35,35 +40,43 @@
           global.webapis.avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
         }
         global.webapis.avplay.setListener({
-          onbufferingstart: function () { setStatus('缓冲中'); },
-          onbufferingprogress: function (percent) { setStatus('缓冲中 ' + percent + '%'); },
-          onbufferingcomplete: function () { setStatus('播放中'); },
+          onbufferingstart: function () { setStatus('Buffering...'); },
+          onbufferingprogress: function (percent) { setStatus('Buffering ' + percent + '%'); },
+          onbufferingcomplete: function () { setStatus('Playing'); },
           onstreamcompleted: function () { stop(); },
-          onerror: function (error) { setStatus('播放错误：' + error); }
+          onerror: function (error) {
+            setStatus('Playback error: ' + error);
+          }
         });
         global.webapis.avplay.prepareAsync(function () {
           prepared = true;
           global.webapis.avplay.play();
-          setStatus('播放中');
+          setStatus('Playing');
         }, function (error) {
-          setStatus('准备播放失败：' + error);
+          setStatus('AVPlay prepare failed, trying browser video: ' + error);
+          usingAvplay = false;
+          openVideo(url);
         });
       } catch (error) {
-        setStatus('AVPlay 不可用，切换浏览器播放器');
+        setStatus('AVPlay unavailable, using browser video.');
         usingAvplay = false;
         openVideo(url);
       }
     }
 
     function openVideo(url) {
-      video.src = url;
-      video.controls = false;
-      video.hidden = false;
-      video.play().then(function () {
-        setStatus('播放中');
-      }).catch(function (error) {
-        setStatus('浏览器播放失败：' + (error && error.message ? error.message : error));
-      });
+      try {
+        video.src = url;
+        video.controls = false;
+        video.hidden = false;
+        video.play().then(function () {
+          setStatus('Playing');
+        }).catch(function (error) {
+          setStatus('Browser playback failed: ' + (error && error.message ? error.message : error));
+        });
+      } catch (error) {
+        setStatus('Browser playback failed: ' + (error && error.message ? error.message : error));
+      }
     }
 
     function toggle() {
@@ -72,17 +85,17 @@
         if (paused) {
           global.webapis.avplay.play();
           paused = false;
-          setStatus('播放中');
+          setStatus('Playing');
         } else {
           global.webapis.avplay.pause();
           paused = true;
-          setStatus('已暂停');
+          setStatus('Paused');
         }
         return;
       }
       if (video.paused) video.play();
       else video.pause();
-      setStatus(video.paused ? '已暂停' : '播放中');
+      setStatus(video.paused ? 'Paused' : 'Playing');
     }
 
     function seek(deltaSeconds) {
@@ -91,7 +104,7 @@
         try {
           target = Math.max(0, global.webapis.avplay.getCurrentTime() + deltaSeconds * 1000);
           global.webapis.avplay.seekTo(target);
-          setStatus(deltaSeconds > 0 ? '快进' : '快退');
+          setStatus(deltaSeconds > 0 ? 'Fast forward' : 'Rewind');
         } catch (error) {}
         return;
       }
@@ -127,7 +140,7 @@
     }
 
     function setStatus(text) {
-      status.textContent = text;
+      if (status) status.textContent = text;
     }
 
     function selfCheck() {

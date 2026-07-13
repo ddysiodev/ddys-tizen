@@ -59,17 +59,25 @@ function New-ZipFromDirectory {
     }
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $fixedTime = [System.DateTimeOffset]::new(2026, 1, 1, 0, 0, 0, [System.TimeSpan]::Zero)
     $archive = [System.IO.Compression.ZipFile]::Open($Output, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
-        $packageFiles = Get-ChildItem -LiteralPath $Source -Recurse -Force -File
+        $packageFiles = Get-ChildItem -LiteralPath $Source -Recurse -Force -File | Sort-Object FullName
         foreach ($file in $packageFiles) {
             $relative = (Get-RelativePathCompat -Base $Source -Path $file.FullName).Replace("\", "/")
-            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                $archive,
-                $file.FullName,
-                $relative,
-                [System.IO.Compression.CompressionLevel]::Optimal
-            ) | Out-Null
+            $entry = $archive.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
+            $entry.LastWriteTime = $fixedTime
+            $input = [System.IO.File]::OpenRead($file.FullName)
+            try {
+                $entryStream = $entry.Open()
+                try {
+                    $input.CopyTo($entryStream)
+                } finally {
+                    $entryStream.Dispose()
+                }
+            } finally {
+                $input.Dispose()
+            }
         }
     } finally {
         $archive.Dispose()

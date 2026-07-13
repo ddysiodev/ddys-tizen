@@ -95,7 +95,8 @@ async function main() {
     'src/player.js',
     'src/app.js',
     'playerScreen',
-    'fallbackVideo'
+    'fallbackVideo',
+    'Starting TV app'
   ]) {
     assert(html.includes(fragment), `index.html missing ${fragment}.`);
   }
@@ -113,7 +114,8 @@ async function main() {
     'classifyUrl',
     'sourceUrl',
     'streamUrl',
-    'includeExternal'
+    'includeExternal',
+    'encodePathSegment'
   ]) {
     assert(client.includes(fragment), `client missing ${fragment}.`);
   }
@@ -134,7 +136,7 @@ async function main() {
   assert(player.includes('stopAvplay(false);'), 'player stop must close AVPlay resources.');
 
   const app = await read('src/app.js');
-  for (const fragment of ['renderHome', 'renderSearch', 'renderDetail', 'renderFavorites', 'renderHistory', 'renderSettings', 'renderCheck', 'ColorF0Red', 'MediaPlayPause', 'closest(', 'readNumber']) {
+  for (const fragment of ['renderHome', 'renderSearch', 'renderDetail', 'renderFavorites', 'renderHistory', 'renderSettings', 'renderCheck', 'ColorF0Red', 'MediaPlayPause', 'closest(', 'readNumber', 'safeArrayOrObject']) {
     assert(app.includes(fragment), `app missing ${fragment}.`);
   }
 
@@ -145,12 +147,13 @@ async function main() {
   assert(!/radial-gradient|circle at|FillEllipse/iu.test(css), 'styles should avoid orb-like backgrounds.');
 
   const readme = await read('README.md');
-  for (const fragment of ['Tizen', 'AVPlay', '遥控器', '.wgt', '设置', '自检']) {
+  for (const fragment of ['三星 Tizen TV', 'AVPlay', '遥控器', '.wgt', '设置', '自检']) {
     assert(readme.includes(fragment), `README missing ${fragment}.`);
   }
-  assert(!readme.includes('## **开发打包**'), 'README contains unwanted developer packaging section.');
+  assert(!/[\u9428\u95AC\u9477\u5BEE\u9356\u59DD\u93BE\u7481]/u.test(readme), 'README contains mojibake text.');
 
   const workflow = await read('.github/workflows/build.yml');
+  assert(/node-version:\s*['"]24['"]/u.test(workflow), 'workflow must use Node 24.');
   assert(workflow.includes('node --check src/app.js'), 'workflow must syntax-check app.');
   assert(workflow.includes('node --test tests/*.test.mjs'), 'workflow must run tests.');
   assert(workflow.includes('tools/build-package.ps1'), 'workflow must build packages.');
@@ -160,7 +163,10 @@ async function main() {
   assert(script.includes('ddys-tizen-v{0}.wgt'), 'build script must produce wgt.');
   assert(script.includes('ddys-tizen-v{0}.zip'), 'build script must produce zip.');
   assert(script.includes('Assert-InRoot'), 'build script must guard recursive paths.');
-  assert(script.includes('ZipFileExtensions'), 'build script must use ZipArchive API.');
+  assert(script.includes('[System.IO.Compression.ZipFile]::Open'), 'build script must use ZipArchive API.');
+  assert(script.includes('CreateEntry'), 'build script must create ZIP entries explicitly.');
+  assert(script.includes('Sort-Object FullName'), 'build script must sort package entries.');
+  assert(script.includes('LastWriteTime'), 'build script must pin package entry timestamps.');
 
   assert((await stat('assets/icon.png')).size > 1000, 'icon.png looks too small.');
   assert((await stat('assets/backdrop.png')).size > 1000, 'backdrop.png looks too small.');
@@ -181,6 +187,9 @@ async function main() {
   assert(!/npm_[A-Za-z0-9_]+/.test(allText), 'npm token-like value found.');
   assert(!/sk-[A-Za-z0-9]{20,}/.test(allText), 'OpenAI token-like value found.');
   assert(!allText.includes('\uFFFD'), 'Replacement character found.');
+
+  const runtimeText = await Promise.all(['index.html', 'src/ddys-client.js', 'src/player.js', 'src/app.js'].map(read));
+  assert(!/[\u59DD\u93BE\u9422\u7481\u95AC\u9477\u5BEE\u9356]/u.test(runtimeText.join('\n')), 'Runtime text contains likely mojibake.');
 
   console.log(JSON.stringify({ ok: true, package: 'ddys-tizen', files: files.length }, null, 2));
 }

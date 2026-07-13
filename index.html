@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,16 +14,16 @@
           <img src="assets/icon.png" alt="" class="brand-icon">
           <div>
             <h1>DDYS</h1>
-            <p id="statusLine">正在启动电视端</p>
+            <p id="statusLine">Starting TV app...</p>
           </div>
         </div>
-        <nav id="mainNav" class="nav">
-          <button data-focusable data-view="home" class="nav-item is-active">首页</button>
-          <button data-focusable data-view="search" class="nav-item">搜索</button>
-          <button data-focusable data-view="favorites" class="nav-item">收藏</button>
-          <button data-focusable data-view="history" class="nav-item">历史</button>
-          <button data-focusable data-view="settings" class="nav-item">设置</button>
-          <button data-focusable data-view="check" class="nav-item">自检</button>
+        <nav id="mainNav" class="nav" aria-label="Main navigation">
+          <button data-focusable data-view="home" class="nav-item is-active">Home</button>
+          <button data-focusable data-view="search" class="nav-item">Search</button>
+          <button data-focusable data-view="favorites" class="nav-item">Favorites</button>
+          <button data-focusable data-view="history" class="nav-item">History</button>
+          <button data-focusable data-view="settings" class="nav-item">Settings</button>
+          <button data-focusable data-view="check" class="nav-item">Self Check</button>
         </nav>
       </header>
 
@@ -35,14 +35,14 @@
       <div class="player-overlay">
         <div>
           <p class="eyebrow" id="playerSource">DDYS</p>
-          <h2 id="playerTitle">准备播放</h2>
-          <p id="playerStatus">正在打开播放器</p>
+          <h2 id="playerTitle">Preparing playback</h2>
+          <p id="playerStatus">Opening player...</p>
         </div>
         <div class="player-actions">
-          <button data-focusable data-player-action="toggle">播放/暂停</button>
-          <button data-focusable data-player-action="seek-back">快退</button>
-          <button data-focusable data-player-action="seek-forward">快进</button>
-          <button data-focusable data-player-action="stop">返回</button>
+          <button data-focusable data-player-action="toggle">Play / Pause</button>
+          <button data-focusable data-player-action="seek-back">Back 15s</button>
+          <button data-focusable data-player-action="seek-forward">Forward 30s</button>
+          <button data-focusable data-player-action="stop">Back</button>
         </div>
       </div>
     </section>

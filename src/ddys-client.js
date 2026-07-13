@@ -14,13 +14,13 @@
   ];
   var PLAYABLE_SUFFIXES = ['.m3u8', '.mpd', '.mp4', '.m4v', '.mkv', '.webm', '.mov', '.avi', '.flv', '.ts', '.m2ts', '.wmv', '.mp3', '.aac', '.flac'];
   var CATEGORIES = [
-    { id: 'latest', title: '最新更新', endpoint: 'latest' },
-    { id: 'hot', title: '热门推荐', endpoint: 'hot' },
-    { id: 'movie', title: '电影', type: 'movie' },
-    { id: 'series', title: '剧集', type: 'series' },
-    { id: 'anime', title: '动画', type: 'anime' },
-    { id: 'variety', title: '综艺', type: 'variety' },
-    { id: 'documentary', title: '纪录片', type: 'documentary' }
+    { id: 'latest', title: 'Latest', endpoint: 'latest' },
+    { id: 'hot', title: 'Hot', endpoint: 'hot' },
+    { id: 'movie', title: 'Movies', type: 'movie' },
+    { id: 'series', title: 'Series', type: 'series' },
+    { id: 'anime', title: 'Anime', type: 'anime' },
+    { id: 'variety', title: 'Variety', type: 'variety' },
+    { id: 'documentary', title: 'Documentary', type: 'documentary' }
   ];
 
   function createClient(settings, dependencies) {
@@ -54,19 +54,22 @@
         return request('/search', { q: query, page: page || 1, per_page: perPage || options.pageSize, limit: perPage || options.pageSize }).then(readMovies);
       },
       detail: function (slug) {
-        return request('/movies/' + encodeURIComponent(slug), {}).then(function (root) {
-          return normalizeMovie(unwrapData(root), 0) || { slug: slug, title: slug };
+        return request('/movies/' + encodePathSegment(slug), {}).then(function (root) {
+          var movie = normalizeMovie(unwrapData(root), 0) || { slug: slug, title: slug };
+          if (!movie.slug) movie.slug = slug;
+          return publicMovie(movie);
         });
       },
       resources: function (slug, movie) {
-        return request('/movies/' + encodeURIComponent(slug) + '/sources', {}).then(function (root) {
+        return request('/movies/' + encodePathSegment(slug) + '/sources', {}).then(function (root) {
           return readResources(root, movie, options);
         });
       },
       movieWithResources: function (slug) {
         var self = this;
         return self.detail(slug).then(function (movie) {
-          return self.resources(slug, movie).then(function (resources) {
+          var activeSlug = movie.slug || slug;
+          return self.resources(activeSlug, movie).then(function (resources) {
             return { movie: publicMovie(movie), resources: resources.map(publicResource) };
           });
         });
@@ -77,11 +80,12 @@
   }
 
   function normalizeSettings(settings) {
+    var mode = String(settings.apiKeyMode || 'query').toLowerCase();
     return {
-      apiBase: trimSlash(settings.apiBase || 'https://ddys.io/api/v1'),
+      apiBase: trimSlash(settings.apiBase || 'https://ddys.io/api/v1') || 'https://ddys.io/api/v1',
       apiKey: settings.apiKey || '',
-      apiKeyMode: allowed(settings.apiKeyMode, ['query', 'bearer', 'header'], 'query'),
-      apiKeyQuery: settings.apiKeyQuery || 'api_key',
+      apiKeyMode: allowed(mode, ['query', 'bearer', 'header'], 'query'),
+      apiKeyQuery: normalizeString(settings.apiKeyQuery, 'api_key'),
       pageSize: clampInt(settings.pageSize, 1, 100, 24),
       cacheTtlSeconds: clampInt(settings.cacheTtlSeconds, 0, 86400, 600),
       directOnly: !!settings.directOnly,
@@ -100,7 +104,7 @@
     if (settings.apiKey && settings.apiKeyMode === 'query') {
       query.push(encodeURIComponent(settings.apiKeyQuery || 'api_key') + '=' + encodeURIComponent(settings.apiKey));
     }
-    return settings.apiBase + (path.charAt(0) === '/' ? path : '/' + path) + (query.length ? '?' + query.join('&') : '');
+    return trimSlash(settings.apiBase) + (path.charAt(0) === '/' ? path : '/' + path) + (query.length ? '?' + query.join('&') : '');
   }
 
   function buildHeaders(settings) {
@@ -138,8 +142,9 @@
   }
 
   function readCache(cache, key, ttlSeconds) {
+    var hit;
     if (!ttlSeconds) return undefined;
-    var hit = cache[key];
+    hit = cache[key];
     if (!hit) return undefined;
     if (Date.now() - hit.createdAt > ttlSeconds * 1000) {
       delete cache[key];
@@ -210,8 +215,8 @@
   function readResources(root, movie, settings) {
     var resources = [];
     var seen = {};
-    appendResourceValues(resources, seen, '在线资源', unwrapData(root), movie);
-    if (movie && movie.raw && typeof movie.raw === 'object') appendResourceValues(resources, seen, '影片资源', movie.raw, movie);
+    appendResourceValues(resources, seen, 'Online Resources', unwrapData(root), movie);
+    if (movie && movie.raw && typeof movie.raw === 'object') appendResourceValues(resources, seen, 'Movie Resources', movie.raw, movie);
     if (settings && settings.directOnly) return resources.filter(isPlayable);
     if (settings && settings.includeExternal === false) return resources.filter(isPlayable);
     return resources;
@@ -393,6 +398,10 @@
 
   function trimSlash(value) {
     return String(value || '').replace(/\/+$/g, '');
+  }
+
+  function encodePathSegment(value) {
+    return encodeURIComponent(String(value || '')).replace(/%2F/gi, '%252F');
   }
 
   function allowed(value, list, fallback) {

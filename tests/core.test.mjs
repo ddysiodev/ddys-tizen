@@ -110,4 +110,6 @@ test('manifest and HTML contain Tizen runtime requirements', async () => {
   assert.match(html, /\$WEBAPIS\/webapis\/webapis\.js/);
   assert.match(html, /playerScreen/);
   assert.match(html, /src\/player\.js/);
+  assert.match(html, /Starting TV app/);
+  assert.doesNotMatch(html, /\uFFFD|\u59DD|\u93BE|\u9422|\u7481|\u95AC|\u9477/);
 });
