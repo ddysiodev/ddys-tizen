@@ -76,8 +76,10 @@ async function main() {
   for (const fragment of [
     '<tizen:profile name="tv-samsung"',
     '<content src="index.html"',
+    '<access origin="*" subdomains="true"',
     '<icon src="assets/icon.png"',
     'http://tizen.org/privilege/internet',
+    'http://developer.samsung.com/privilege/avplay',
     'io.ddys.tizen',
     'version="0.1.0"'
   ]) {
@@ -87,6 +89,7 @@ async function main() {
   const html = await read('index.html');
   for (const fragment of [
     'src/store.js',
+    '$WEBAPIS/webapis/webapis.js',
     'src/ddys-client.js',
     'src/focus.js',
     'src/player.js',
@@ -114,6 +117,7 @@ async function main() {
   ]) {
     assert(client.includes(fragment), `client missing ${fragment}.`);
   }
+  assert(!client.includes('x-ddys-client'), 'default requests should avoid custom headers that trigger CORS preflight.');
   for (const kind of ['magnet', 'ed2k', 'torrent', 'playable', 'link', 'unknown']) {
     assert(client.includes(`'${kind}'`), `resource kind missing ${kind}.`);
   }
@@ -127,9 +131,10 @@ async function main() {
   for (const fragment of ['webapis.avplay', 'prepareAsync', 'setDisplayRect', 'fallbackVideo', 'seekTo']) {
     assert(player.includes(fragment), `player missing ${fragment}.`);
   }
+  assert(player.includes('stopAvplay(false);'), 'player stop must close AVPlay resources.');
 
   const app = await read('src/app.js');
-  for (const fragment of ['renderHome', 'renderSearch', 'renderDetail', 'renderFavorites', 'renderHistory', 'renderSettings', 'renderCheck', 'ColorF0Red', 'MediaPlayPause', 'closest(']) {
+  for (const fragment of ['renderHome', 'renderSearch', 'renderDetail', 'renderFavorites', 'renderHistory', 'renderSettings', 'renderCheck', 'ColorF0Red', 'MediaPlayPause', 'closest(', 'readNumber']) {
     assert(app.includes(fragment), `app missing ${fragment}.`);
   }
 

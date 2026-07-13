@@ -353,8 +353,8 @@
       apiKey: valueOf('apiKey'),
       apiKeyMode: valueOf('apiKeyMode') || 'query',
       apiKeyQuery: valueOf('apiKeyQuery') || 'api_key',
-      pageSize: Number(valueOf('pageSize')) || 24,
-      cacheTtlSeconds: Number(valueOf('cacheTtlSeconds')) || 600,
+      pageSize: readNumber(valueOf('pageSize'), 24),
+      cacheTtlSeconds: readNumber(valueOf('cacheTtlSeconds'), 600),
       directOnly: checkedOf('directOnly'),
       includeExternal: checkedOf('includeExternal')
     };
@@ -541,6 +541,11 @@
     } catch (error) {
       return value;
     }
+  }
+
+  function readNumber(value, fallback) {
+    var number = Number(value);
+    return isFinite(number) ? number : fallback;
   }
 
   function merge(base, extra) {

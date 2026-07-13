@@ -104,7 +104,7 @@
   }
 
   function buildHeaders(settings) {
-    var headers = { accept: 'application/json', 'x-ddys-client': 'ddys-tizen/' + VERSION };
+    var headers = { accept: 'application/json' };
     if (settings.apiKey && settings.apiKeyMode === 'bearer') headers.authorization = 'Bearer ' + settings.apiKey;
     if (settings.apiKey && settings.apiKeyMode === 'header') headers['x-api-key'] = settings.apiKey;
     return headers;

@@ -13,10 +13,12 @@
                  install-location="auto"
                  hwkey-event="enable"/>
   <content src="index.html"/>
+  <access origin="*" subdomains="true"/>
   <icon src="assets/icon.png"/>
   <name>DDYS</name>
   <description>DDYS Samsung Tizen TV app</description>
   <author href="https://ddys.io" email="dev@ddys.io">DDYS</author>
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
   <tizen:feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
 </widget>

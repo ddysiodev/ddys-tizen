@@ -102,9 +102,10 @@
 
     function stop() {
       if (current) onStop(current);
-      stopAvplay(true);
+      stopAvplay(false);
       video.pause();
       video.removeAttribute('src');
+      video.hidden = true;
       try { video.load(); } catch (error) {}
       current = null;
       prepared = false;

@@ -41,6 +41,7 @@ test('settings and URL builder support API key modes', () => {
     'https://api.example.test/search?q=%E7%94%B5%E5%BD%B1&api_key=abc'
   );
   assert.equal(DDYSClient.normalizeSettings({ apiKeyMode: 'bad' }).apiKeyMode, 'query');
+  assert.equal(DDYSClient.normalizeSettings({ cacheTtlSeconds: 0 }).cacheTtlSeconds, 0);
 });
 
 test('client normalizes movie lists and caches requests', async () => {
@@ -102,8 +103,11 @@ test('manifest and HTML contain Tizen runtime requirements', async () => {
   const config = await fs.promises.readFile(path.join(root, 'config.xml'), 'utf8');
   const html = await fs.promises.readFile(path.join(root, 'index.html'), 'utf8');
   assert.match(config, /tv-samsung/);
+  assert.match(config, /<access origin="\*" subdomains="true"/);
   assert.match(config, /http:\/\/tizen\.org\/privilege\/internet/);
+  assert.match(config, /http:\/\/developer\.samsung\.com\/privilege\/avplay/);
   assert.match(config, /assets\/icon\.png/);
+  assert.match(html, /\$WEBAPIS\/webapis\/webapis\.js/);
   assert.match(html, /playerScreen/);
   assert.match(html, /src\/player\.js/);
 });
