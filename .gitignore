@@ -1,0 +1,14 @@
+node_modules/
+coverage/
+dist/
+build/
+package/
+releases/
+*.log
+*.tmp
+*.cache
+*.zip
+*.wgt
+.env
+.env.*
+!.env.example

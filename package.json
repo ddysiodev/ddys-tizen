@@ -1,0 +1,23 @@
+{
+  "name": "ddys-tizen",
+  "version": "0.1.0",
+  "description": "Samsung Tizen TV web application for browsing and watching DDYS resources.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "check": "node tools/check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-package.ps1"
+  },
+  "keywords": [
+    "ddys",
+    "tizen",
+    "samsung-tv",
+    "smart-tv",
+    "avplay"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
