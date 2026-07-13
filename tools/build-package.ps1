@@ -65,7 +65,7 @@ function New-ZipFromDirectory {
         $packageFiles = Get-ChildItem -LiteralPath $Source -Recurse -Force -File | Sort-Object FullName
         foreach ($file in $packageFiles) {
             $relative = (Get-RelativePathCompat -Base $Source -Path $file.FullName).Replace("\", "/")
-            $entry = $archive.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
+            $entry = $archive.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::NoCompression)
             $entry.LastWriteTime = $fixedTime
             $input = [System.IO.File]::OpenRead($file.FullName)
             try {

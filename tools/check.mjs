@@ -165,6 +165,7 @@ async function main() {
   assert(script.includes('Assert-InRoot'), 'build script must guard recursive paths.');
   assert(script.includes('[System.IO.Compression.ZipFile]::Open'), 'build script must use ZipArchive API.');
   assert(script.includes('CreateEntry'), 'build script must create ZIP entries explicitly.');
+  assert(script.includes('CompressionLevel]::NoCompression'), 'build script must avoid platform-specific Deflate output.');
   assert(script.includes('Sort-Object FullName'), 'build script must sort package entries.');
   assert(script.includes('LastWriteTime'), 'build script must pin package entry timestamps.');
 
