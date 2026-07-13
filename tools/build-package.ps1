@@ -57,30 +57,115 @@ function New-ZipFromDirectory {
     if (Test-Path -LiteralPath $Output) {
         Remove-Item -LiteralPath $Output -Force
     }
-    Add-Type -AssemblyName System.IO.Compression
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $fixedTime = [System.DateTimeOffset]::new(2026, 1, 1, 0, 0, 0, [System.TimeSpan]::Zero)
-    $archive = [System.IO.Compression.ZipFile]::Open($Output, [System.IO.Compression.ZipArchiveMode]::Create)
+
+    if (-not ("DdysZipCrc32" -as [type])) {
+        Add-Type -TypeDefinition @"
+public static class DdysZipCrc32 {
+    public static uint Compute(byte[] bytes) {
+        uint crc = 0xffffffffu;
+        for (int i = 0; i < bytes.Length; i++) {
+            uint value = (crc ^ bytes[i]) & 0xffu;
+            for (int bit = 0; bit < 8; bit++) {
+                value = ((value & 1u) != 0u) ? (0xedb88320u ^ (value >> 1)) : (value >> 1);
+            }
+            crc = (crc >> 8) ^ value;
+        }
+        return crc ^ 0xffffffffu;
+    }
+}
+"@
+    }
+
+    $utf8 = [System.Text.Encoding]::UTF8
+    $fixedDosTime = [uint16]0x0000
+    $fixedDosDate = [uint16]0x5c21
+    $generalPurposeFlagUtf8 = [uint16]0x0800
+    $storedMethod = [uint16]0
+    $entries = New-Object System.Collections.Generic.List[object]
+    $packageFiles = Get-ChildItem -LiteralPath $Source -Recurse -Force -File | Sort-Object FullName
+
+    $stream = [System.IO.File]::Open($Output, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $writer = $null
     try {
-        $packageFiles = Get-ChildItem -LiteralPath $Source -Recurse -Force -File | Sort-Object FullName
+        $writer = [System.IO.BinaryWriter]::new($stream, $utf8, $false)
         foreach ($file in $packageFiles) {
             $relative = (Get-RelativePathCompat -Base $Source -Path $file.FullName).Replace("\", "/")
-            $entry = $archive.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::NoCompression)
-            $entry.LastWriteTime = $fixedTime
-            $input = [System.IO.File]::OpenRead($file.FullName)
-            try {
-                $entryStream = $entry.Open()
-                try {
-                    $input.CopyTo($entryStream)
-                } finally {
-                    $entryStream.Dispose()
-                }
-            } finally {
-                $input.Dispose()
+            $nameBytes = $utf8.GetBytes($relative)
+            $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+            if ($bytes.LongLength -gt [uint32]::MaxValue) {
+                throw "File too large for deterministic ZIP32 package: $relative"
             }
+            if ($nameBytes.Length -gt [uint16]::MaxValue) {
+                throw "File name too long for ZIP package: $relative"
+            }
+
+            $offset = [uint32]$writer.BaseStream.Position
+            $size = [uint32]$bytes.Length
+            $crc = [DdysZipCrc32]::Compute($bytes)
+
+            $writer.Write([uint32]0x04034b50)
+            $writer.Write([uint16]20)
+            $writer.Write($generalPurposeFlagUtf8)
+            $writer.Write($storedMethod)
+            $writer.Write($fixedDosTime)
+            $writer.Write($fixedDosDate)
+            $writer.Write([uint32]$crc)
+            $writer.Write($size)
+            $writer.Write($size)
+            $writer.Write([uint16]$nameBytes.Length)
+            $writer.Write([uint16]0)
+            $writer.Write($nameBytes)
+            $writer.Write($bytes)
+
+            [void]$entries.Add([pscustomobject]@{
+                NameBytes = $nameBytes
+                Crc = [uint32]$crc
+                Size = $size
+                Offset = $offset
+            })
         }
+
+        if ($entries.Count -gt [uint16]::MaxValue) {
+            throw "Too many files for deterministic ZIP32 package."
+        }
+
+        $centralOffset = [uint32]$writer.BaseStream.Position
+        foreach ($entry in $entries) {
+            $writer.Write([uint32]0x02014b50)
+            $writer.Write([uint16]20)
+            $writer.Write([uint16]20)
+            $writer.Write($generalPurposeFlagUtf8)
+            $writer.Write($storedMethod)
+            $writer.Write($fixedDosTime)
+            $writer.Write($fixedDosDate)
+            $writer.Write([uint32]$entry.Crc)
+            $writer.Write([uint32]$entry.Size)
+            $writer.Write([uint32]$entry.Size)
+            $writer.Write([uint16]$entry.NameBytes.Length)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint32]0)
+            $writer.Write([uint32]$entry.Offset)
+            $writer.Write($entry.NameBytes)
+        }
+        $centralSize = [uint32]($writer.BaseStream.Position - $centralOffset)
+
+        $writer.Write([uint32]0x06054b50)
+        $writer.Write([uint16]0)
+        $writer.Write([uint16]0)
+        $writer.Write([uint16]$entries.Count)
+        $writer.Write([uint16]$entries.Count)
+        $writer.Write($centralSize)
+        $writer.Write($centralOffset)
+        $writer.Write([uint16]0)
     } finally {
-        $archive.Dispose()
+        if ($null -ne $writer) {
+            $writer.Dispose()
+        } else {
+            $stream.Dispose()
+        }
     }
 }
 

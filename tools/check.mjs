@@ -163,11 +163,12 @@ async function main() {
   assert(script.includes('ddys-tizen-v{0}.wgt'), 'build script must produce wgt.');
   assert(script.includes('ddys-tizen-v{0}.zip'), 'build script must produce zip.');
   assert(script.includes('Assert-InRoot'), 'build script must guard recursive paths.');
-  assert(script.includes('[System.IO.Compression.ZipFile]::Open'), 'build script must use ZipArchive API.');
-  assert(script.includes('CreateEntry'), 'build script must create ZIP entries explicitly.');
-  assert(script.includes('CompressionLevel]::NoCompression'), 'build script must avoid platform-specific Deflate output.');
+  assert(script.includes('DdysZipCrc32'), 'build script must compute deterministic ZIP CRC values.');
+  assert(script.includes('0x04034b50'), 'build script must write ZIP local file headers explicitly.');
+  assert(script.includes('0x02014b50'), 'build script must write ZIP central directory headers explicitly.');
+  assert(script.includes('0x06054b50'), 'build script must write ZIP end of central directory explicitly.');
   assert(script.includes('Sort-Object FullName'), 'build script must sort package entries.');
-  assert(script.includes('LastWriteTime'), 'build script must pin package entry timestamps.');
+  assert(script.includes('fixedDosDate'), 'build script must pin package entry timestamps.');
 
   assert((await stat('assets/icon.png')).size > 1000, 'icon.png looks too small.');
   assert((await stat('assets/backdrop.png')).size > 1000, 'backdrop.png looks too small.');
