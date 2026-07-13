@@ -167,7 +167,7 @@ async function main() {
   assert(script.includes('0x04034b50'), 'build script must write ZIP local file headers explicitly.');
   assert(script.includes('0x02014b50'), 'build script must write ZIP central directory headers explicitly.');
   assert(script.includes('0x06054b50'), 'build script must write ZIP end of central directory explicitly.');
-  assert(script.includes('Sort-Object FullName'), 'build script must sort package entries.');
+  assert(script.includes('StringComparer]::Ordinal.Compare'), 'build script must sort package entries by ordinal relative path.');
   assert(script.includes('fixedDosDate'), 'build script must pin package entry timestamps.');
 
   assert((await stat('assets/icon.png')).size > 1000, 'icon.png looks too small.');

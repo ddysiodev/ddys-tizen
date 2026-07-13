@@ -82,14 +82,25 @@ public static class DdysZipCrc32 {
     $generalPurposeFlagUtf8 = [uint16]0x0800
     $storedMethod = [uint16]0
     $entries = New-Object System.Collections.Generic.List[object]
-    $packageFiles = Get-ChildItem -LiteralPath $Source -Recurse -Force -File | Sort-Object FullName
+    $packageFiles = New-Object System.Collections.Generic.List[object]
+    foreach ($file in (Get-ChildItem -LiteralPath $Source -Recurse -Force -File)) {
+        [void]$packageFiles.Add([pscustomobject]@{
+            File = $file
+            Relative = (Get-RelativePathCompat -Base $Source -Path $file.FullName).Replace("\", "/")
+        })
+    }
+    $packageFiles.Sort([System.Comparison[object]]{
+        param($left, $right)
+        return [System.StringComparer]::Ordinal.Compare([string]$left.Relative, [string]$right.Relative)
+    })
 
     $stream = [System.IO.File]::Open($Output, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
     $writer = $null
     try {
         $writer = [System.IO.BinaryWriter]::new($stream, $utf8, $false)
-        foreach ($file in $packageFiles) {
-            $relative = (Get-RelativePathCompat -Base $Source -Path $file.FullName).Replace("\", "/")
+        foreach ($packageFile in $packageFiles) {
+            $file = $packageFile.File
+            $relative = $packageFile.Relative
             $nameBytes = $utf8.GetBytes($relative)
             $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
             if ($bytes.LongLength -gt [uint32]::MaxValue) {
